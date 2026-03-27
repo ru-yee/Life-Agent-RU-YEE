@@ -4,18 +4,19 @@ services:
       context: .
       target: backend
     container_name: life-agent-app
-    privileged: true
-    ports:
-      - "8001:8000"
-    volumes:
-      - .:/app
-    devices:
-      - /dev/bus/usb:/dev/bus/usb
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://lifeagent:lifeagent@postgres:5432/lifeagent
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-lifeagent}:${POSTGRES_PASSWORD:-lifeagent}@postgres:5432/${POSTGRES_DB:-lifeagent}
       - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     depends_on:
       postgres:
         condition: service_healthy
@@ -27,29 +28,29 @@ services:
     image: postgres:16-alpine
     container_name: life-agent-postgres
     environment:
-      POSTGRES_DB: lifeagent
-      POSTGRES_USER: lifeagent
-      POSTGRES_PASSWORD: lifeagent
-    ports:
-      - "5433:5432"
+      POSTGRES_DB: ${POSTGRES_DB:-lifeagent}
+      POSTGRES_USER: ${POSTGRES_USER:-lifeagent}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lifeagent}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U lifeagent"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lifeagent}"]
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
     container_name: life-agent-redis
-    ports:
-      - "6380:6379"
+    volumes:
+      - redisdata:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   nginx:
     build:
@@ -57,10 +58,14 @@ services:
       target: nginx
     container_name: life-agent-nginx
     ports:
-      - "80:80"
+      - "${NGINX_PORT:-80}:80"
+    volumes:
+      - ./nginx-allow.conf:/etc/nginx/snippets/allow.conf:ro
     depends_on:
-      - app
+      app:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
   pgdata:
+  redisdata:

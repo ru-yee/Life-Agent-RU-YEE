@@ -1,0 +1,19 @@
+# 开发模式 — 复制为 docker-compose.override.yml 后自动生效
+# cp docker-compose.override.yml.example docker-compose.override.yml
+services:
+  app:
+    volumes:
+      - .:/app
+      - ./config.yaml:/app/config.yaml
+    # USB 设备（仅在连接安卓设备时启用）
+    devices:
+      - /dev/bus/usb:/dev/bus/usb
+
+  # 开发时暴露数据库端口便于调试
+  postgres:
+    ports:
+      - "5433:5432"
+
+  redis:
+    ports:
+      - "6380:6379"

@@ -38,6 +38,9 @@ testpaths = ["tests"]
 [tool.setuptools.packages.find]
 include = ["core*", "api*", "cli*", "plugins*"]
 
+[tool.setuptools.package-data]
+"*" = ["*.yaml", "*.yml", "*.j2", "*.jinja2", "*.json"]
+
 [tool.ruff]
 line-length = 120
 target-version = "py311"
