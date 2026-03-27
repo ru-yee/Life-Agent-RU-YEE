@@ -15,7 +15,7 @@ https://github.com/user/LARY/raw/main/录屏2026-03-27%20195619.mp4
 - **SSE 实时流式交互** — 工具调用进度、思考状态、操作日志实时推送到前端
 - **安卓设备自动化** — 通过 uiautomator2 控制安卓设备，在盒马 APP 上自动搜索和加购商品
 - **用户画像** — 自动收集家庭人数、口味偏好等信息，个性化推荐菜谱
-- **SkillHub 技能市场** — 在线浏览、安装、卸载社区插件
+- **SkillHub 技能市场** — 在线浏览、安装、卸载社区插件（尚未开放）
 
 ## 技术栈
 
@@ -119,21 +119,36 @@ npm run dev
 
 ```bash
 cp .env.example .env
-# 编辑 .env 填入 API Key
+# 编辑 .env，填入 API Key 和数据库密码
 docker compose up --build -d
 ```
 
-访问 `http://localhost`
+访问 `http://localhost`（可通过 `.env` 中 `NGINX_PORT` 修改端口）
+
+#### 开发模式
+
+```bash
+cp docker-compose.override.yml.example docker-compose.override.yml
+docker compose up --build -d
+```
+
+开发模式额外提供：源码热更新（volume 挂载）、数据库/Redis 端口暴露、USB 设备透传。
+
+#### 自定义 IP 白名单
+
+编辑 `nginx-allow.conf` 添加或移除允许访问的 IP 段，修改后重启 nginx 即可生效，无需重新构建镜像：
+
+```bash
+docker compose restart nginx
+```
 
 #### 安卓设备连接（采购功能）
 
-采购 Agent 通过 uiautomator2 控制安卓设备操作盒马 APP。Docker 部署时默认通过 USB 连接设备：
+采购 Agent 通过 uiautomator2 控制安卓设备操作盒马 APP：
 
-1. 将安卓设备通过 USB 连接到服务器
-2. 开启设备的 USB 调试模式
-3. `docker-compose.yml` 已配置 USB 设备透传（`/dev/bus/usb`），容器内可直接使用 adb
-
-如需通过网络连接设备，在 `config.yaml` 中配置：
+1. 将安卓设备通过 USB 连接到服务器，开启 USB 调试模式
+2. 启用开发模式（`docker-compose.override.yml`），其中已配置 USB 设备透传
+3. 如需通过网络连接设备，在 `config.yaml` 中配置：
 
 ```yaml
 plugins:
@@ -167,9 +182,11 @@ ruff check .
 
 | 文件 | 用途 |
 |------|------|
-| `.env` | 环境变量（API Key、数据库连接），**不提交到 git** |
-| `config.yaml` | 应用配置（启用的插件、LLM 模型、参数） |
+| `.env` | 环境变量（API Key、数据库密码等），**不提交到 git** |
+| `config.yaml` | 应用配置（启用的插件、LLM 模型、参数），Docker 部署时通过 volume 挂载 |
+| `nginx-allow.conf` | Nginx IP 白名单，修改后 `docker compose restart nginx` 即可生效 |
 | `.env.example` | 环境变量模板 |
+| `docker-compose.override.yml.example` | 开发模式模板（USB 透传、端口暴露、源码挂载） |
 
 ## License
 

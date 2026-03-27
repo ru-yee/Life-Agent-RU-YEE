@@ -19,3 +19,9 @@ contrib/
 
 # Claude Code
 CLAUDE.md
+
+# Docker 开发模式（.example 保留为模板）
+docker-compose.override.yml
+
+# 文档与规划
+docs/
