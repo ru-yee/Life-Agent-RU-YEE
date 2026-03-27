@@ -6,6 +6,7 @@ from typing import Any, AsyncIterator
 
 from loguru import logger
 
+from core.i18n import t
 from core.context_bus import ContextBus
 from core.intent_router import IntentRouter
 from core.interfaces.agent import SSEEvent, AgentResult
@@ -49,17 +50,18 @@ class Orchestrator:
     async def _store_turn(
         self, session_id: str, role: str, content: str,
         tool_calls: list[dict] | None = None,
-    ) -> None:
-        """存储一轮对话到 ShortTermMemory"""
+    ) -> int | None:
+        """存储一轮对话到 ShortTermMemory，返回数据库记录 id"""
         if not self._memory or (not content.strip() and not tool_calls):
-            return
+            return None
         try:
             value: dict = {"role": role, "content": content}
             if tool_calls:
                 value["tool_calls"] = tool_calls
-            await self._memory.store(session_id, value)
+            return await self._memory.store(session_id, value)
         except Exception as e:
             logger.warning(f"Failed to store turn: {e}")
+            return None
 
     async def run_stream(
         self,
@@ -85,12 +87,12 @@ class Orchestrator:
 
         if intent.confidence < 0.6 or not intent.agent:
             agents = self._registry.list_plugins(plugin_type="agent")
-            available = ", ".join(a.name for a in agents) if agents else "无"
+            available = ", ".join(a.name for a in agents) if agents else t("orchestrator.none")
             yield SSEEvent(
                 event="error",
                 data={
-                    "error": "未找到匹配的 Agent",
-                    "suggestion": f"当前可用 Agent: {available}",
+                    "error": t("orchestrator.error.no_match"),
+                    "suggestion": t("orchestrator.error.available_agents", available=available),
                 },
             )
             return
@@ -115,7 +117,7 @@ class Orchestrator:
             if not agent:
                 yield SSEEvent(
                     event="error",
-                    data={"error": f"Agent '{sub_task.agent}' not found"},
+                    data={"error": t("orchestrator.error.agent_not_found", agent=sub_task.agent)},
                 )
                 return
 
@@ -135,6 +137,7 @@ class Orchestrator:
                 elif event.event == "tool_call":
                     current_tool = {
                         "tool": event.data.get("tool", ""),
+                        "tool_call_id": event.data.get("tool_call_id", ""),
                         "params": event.data.get("params", {}),
                     }
                 elif event.event == "tool_output_done" and current_tool:
@@ -150,11 +153,15 @@ class Orchestrator:
                     current_tool = None
                 yield event
 
-        # 6. 存储助手回复（含工具调用数据）
-        await self._store_turn(
+        # 6. 存储助手回复（含工具调用数据），获取数据库 id
+        db_id = await self._store_turn(
             session_id, "assistant", collected_content,
             tool_calls=collected_tools or None,
         )
+
+        # 7. 推送消息 id，供前端后续更新（如勾选状态持久化）
+        if db_id is not None:
+            yield SSEEvent(event="message_saved", data={"message_id": db_id})
 
     async def run_sync(
         self,

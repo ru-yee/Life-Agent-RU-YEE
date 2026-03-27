@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from core.i18n import t
 from core.interfaces.tool import BaseTool, ToolResult
 
 

@@ -6,17 +6,17 @@
       class="mx-4 mt-2 px-4 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-center justify-between"
     >
       <span>{{ error }}</span>
-      <button class="text-red-500 underline text-xs ml-2" @click="retryLast">重试</button>
+      <button class="text-red-500 underline text-xs ml-2" @click="retryLast">{{ t('chat.retry') }}</button>
     </div>
 
     <!-- Messages -->
     <div ref="scrollContainer" class="flex-1 overflow-y-auto px-4 py-4 space-y-3" @scroll="onScroll">
       <!-- 加载更多 -->
       <div v-if="loadingMore" class="flex justify-center py-2">
-        <span class="text-xs text-gray-400 animate-pulse">加载更早的消息...</span>
+        <span class="text-xs text-gray-400 animate-pulse">{{ t('chat.loading.more') }}</span>
       </div>
       <div v-else-if="hasMore" class="flex justify-center py-2">
-        <button class="text-xs text-blue-500 hover:text-blue-700" @click="handleLoadMore">加载更多</button>
+        <button class="text-xs text-blue-500 hover:text-blue-700" @click="handleLoadMore">{{ t('chat.loading.loadMore') }}</button>
       </div>
 
       <WelcomeCard
@@ -31,6 +31,7 @@
         :streaming="isStreaming && i === messages.length - 1 && msg.role === 'assistant'"
         @toggle-tool="toggleTool(msg.id, $event)"
         @quick-reply="handleQuickReply"
+        @tool-data-change="persistToolData(msg)"
       />
       <div ref="scrollAnchor" />
     </div>
@@ -42,7 +43,7 @@
           v-if="messages.length > 0"
           type="button"
           class="shrink-0 w-10 h-10 rounded-full border border-gray-300 text-gray-400 flex items-center justify-center hover:text-red-500 hover:border-red-300 transition-colors"
-          title="清除聊天"
+          :title="t('chat.input.clear')"
           :disabled="isStreaming"
           @click="handleClear"
         >
@@ -54,7 +55,7 @@
           ref="inputEl"
           v-model="input"
           type="text"
-          placeholder="输入消息..."
+          :placeholder="t('chat.input.placeholder')"
           class="flex-1 rounded-full border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           :disabled="isStreaming"
         />
@@ -72,12 +73,15 @@
 
 <script setup lang="ts">
 import { ref, watch, nextTick, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useSSE } from '../composables/useSSE'
-import { fetchOpening } from '../api/chat'
+import { fetchOpening, updateMessageToolData } from '../api/chat'
 import type { OpeningConfig } from '../api/chat'
+import type { Message } from '../types'
 import MessageBubble from '../components/chat/MessageBubble.vue'
 import WelcomeCard from '../components/chat/WelcomeCard.vue'
 
+const { t } = useI18n()
 const { messages, isStreaming, error, hasMore, loadingMore, send, clear, loadHistory, loadMoreHistory } = useSSE()
 
 const openingConfig = ref<OpeningConfig | null>(null)
@@ -132,6 +136,22 @@ function toggleTool(msgId: string, toolIdx: number) {
   const updated = [...messages.value]
   updated[idx] = msg
   messages.value = updated
+}
+
+let persistTimer: ReturnType<typeof setTimeout> | null = null
+function persistToolData(msg: Message) {
+  if (!msg.dbId || !msg.toolCalls?.length) return
+  // 防抖 500ms，避免连续勾选多次请求
+  if (persistTimer) clearTimeout(persistTimer)
+  persistTimer = setTimeout(() => {
+    const toolData = msg.toolCalls!.map((tc) => ({
+      tool: tc.tool,
+      tool_call_id: tc.toolCallId,
+      params: tc.params,
+      result: tc.result,
+    }))
+    updateMessageToolData(msg.dbId!, toolData)
+  }, 500)
 }
 
 async function handleLoadMore() {

@@ -43,15 +43,16 @@ class ShortTermMemory(BaseMemory):
 
     # ── 写入：PG + Redis 双写 ──────────────────────────────
 
-    async def store(self, key: str, value: Any, **metadata: Any) -> None:
-        """存储对话轮次。key = session_id, value = {role, content}"""
+    async def store(self, key: str, value: Any, **metadata: Any) -> int | None:
+        """存储对话轮次。key = session_id, value = {role, content}。返回 PG 记录 id。"""
         # 1. 写入 PostgreSQL
-        await self._store_pg(key, value)
+        db_id = await self._store_pg(key, value)
 
         # 2. 写入 Redis 热缓存
         self._store_redis(key, value)
+        return db_id
 
-    async def _store_pg(self, session_id: str, value: Any) -> None:
+    async def _store_pg(self, session_id: str, value: Any) -> int | None:
         try:
             from core.database import get_session_factory, ChatMessage
             factory = get_session_factory()
@@ -66,8 +67,11 @@ class ShortTermMemory(BaseMemory):
                 )
                 session.add(msg)
                 await session.commit()
+                await session.refresh(msg)
+                return msg.id
         except Exception as e:
             logger.warning(f"PG store failed: {e}")
+            return None
 
     def _store_redis(self, session_id: str, value: Any) -> None:
         if not self._redis:

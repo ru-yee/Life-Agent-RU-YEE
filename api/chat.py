@@ -7,6 +7,7 @@ from loguru import logger
 from pydantic import BaseModel, Field
 from fastapi import APIRouter
 
+from core.i18n import t, get_locale, set_locale
 from core.stream import sse_response
 
 # session_id 格式：UUID-v4 变体 + base36 时间戳后缀（含 a-z）
@@ -14,23 +15,24 @@ _SESSION_ID_RE = re.compile(r"^[0-9a-z\-]{15,50}$")
 
 router = APIRouter()
 
-OPENING_CONFIG = {
-    "agent_name": "如意",
-    "agent_avatar": "🍽️",
-    "agent_intro": "我是你的家庭饮食顾问，可以根据你的口味和家庭情况，量身定制餐食方案。",
-    "suggested_questions": [
-        "帮我规划明天的菜谱",
-        "推荐几道适合孩子吃的菜",
-        "有什么低卡减脂的菜",
-        "帮我在盒马买点鸡胸肉和西兰花",
-    ],
-}
+def get_opening_config():
+    return {
+        "agent_name": t("opening.agent_name"),
+        "agent_avatar": "🍽️",
+        "agent_intro": t("opening.agent_intro"),
+        "suggested_questions": [
+            t("opening.q1"),
+            t("opening.q2"),
+            t("opening.q3"),
+            t("opening.q4"),
+        ],
+    }
 
 
 @router.get("/opening")
 async def chat_opening():
     """获取开场白配置"""
-    return {"success": True, "data": OPENING_CONFIG}
+    return {"success": True, "data": get_opening_config()}
 
 
 class ChatRequest(BaseModel):
@@ -53,8 +55,14 @@ async def chat_stream(req: ChatRequest):
     if not orchestrator:
         return {"success": False, "error": "Orchestrator not initialized"}
 
-    events = orchestrator.run_stream(req.message, req.session_id)
-    return sse_response(events)
+    locale = get_locale()
+
+    async def locale_aware_stream():
+        set_locale(locale)
+        async for event in orchestrator.run_stream(req.message, req.session_id):
+            yield event
+
+    return sse_response(locale_aware_stream())
 
 
 class UserInputRequest(BaseModel):
@@ -110,7 +118,9 @@ async def chat_history(session_id: str, limit: int = 50, offset: int = 0):
 
         turns = []
         for r in rows:
-            turn: dict = {"role": r.role, "content": r.content}
+            turn: dict = {"id": r.id, "role": r.role, "content": r.content}
+            if r.created_at:
+                turn["created_at"] = r.created_at.isoformat()
             if r.tool_data:
                 import json as _json
                 try:
@@ -161,6 +171,33 @@ async def chat_clear(session_id: str):
     except Exception as e:
         logger.error(f"清除历史记录失败: {e}")
         return {"success": False, "error": "清除历史记录失败"}
+
+
+class UpdateToolDataRequest(BaseModel):
+    tool_data: list = Field(..., description="更新后的 tool_calls JSON 数组")
+
+
+@router.patch("/message/{message_id}")
+async def update_message_tool_data(message_id: int, req: UpdateToolDataRequest):
+    """更新消息的 tool_data（如采购清单勾选状态）"""
+    import json as _json
+    from core.database import get_session_factory, ChatMessage
+
+    try:
+        factory = get_session_factory()
+        async with factory() as session:
+            from sqlalchemy import select
+            stmt = select(ChatMessage).where(ChatMessage.id == message_id)
+            result = await session.execute(stmt)
+            msg = result.scalar_one_or_none()
+            if not msg:
+                return {"success": False, "error": "消息不存在"}
+            msg.tool_data = _json.dumps(req.tool_data, ensure_ascii=False)
+            await session.commit()
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"更新消息 tool_data 失败: {e}")
+        return {"success": False, "error": "更新失败"}
 
 
 @router.post("/sync")

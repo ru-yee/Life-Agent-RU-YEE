@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import random
 
+from core.i18n import t
 from core.interfaces.tool import BaseTool, ToolResult
 from tools.dish_query_tool import DISH_DATABASE
 
@@ -16,7 +17,7 @@ class MealRecommendTool(BaseTool):
 
     @property
     def description(self) -> str:
-        return "根据天数、目标和偏好生成餐食推荐计划。返回每日早中晚的菜品推荐。"
+        return t("tool.meal_recommend.desc")
 
     @property
     def parameters_schema(self) -> dict:
@@ -25,37 +26,37 @@ class MealRecommendTool(BaseTool):
             "properties": {
                 "days": {
                     "type": "integer",
-                    "description": "规划天数（1-7）",
+                    "description": t("tool.param.days"),
                     "default": 1,
                 },
                 "goal": {
                     "type": "string",
-                    "description": "饮食目标：减脂、增肌、均衡、清淡",
+                    "description": t("tool.param.goal"),
                     "default": "均衡",
                 },
                 "cuisine_preference": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "偏好菜系",
+                    "description": t("tool.param.cuisine_preference"),
                 },
                 "daily_calories": {
                     "type": "integer",
-                    "description": "每日目标卡路里",
+                    "description": t("tool.param.daily_calories"),
                     "default": 2000,
                 },
                 "exclude_flavors": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "排除的口味（如：辣）",
+                    "description": t("tool.param.exclude_flavors"),
                 },
                 "exclude_ingredients": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "排除的食材（过敏等）",
+                    "description": t("tool.param.exclude_ingredients"),
                 },
                 "suitability": {
                     "type": "string",
-                    "description": "适宜人群筛选",
+                    "description": t("tool.param.suitability"),
                 },
             },
             "required": ["days"],

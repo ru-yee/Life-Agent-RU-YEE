@@ -6,12 +6,12 @@
     >
       <span class="text-base">{{ toolIcon }}</span>
       <span class="font-medium text-gray-700 flex-1">{{ toolLabel }}</span>
-      <span v-if="info.streaming" class="text-xs text-blue-500 animate-pulse">接收中...</span>
+      <span v-if="info.streaming" class="text-xs text-blue-500 animate-pulse">{{ t('tool.status.receiving') }}</span>
       <span v-else-if="info.result" class="text-xs" :class="resultSuccess ? 'text-green-600' : 'text-red-500'">
-        {{ resultSuccess ? '完成' : '失败' }}
+        {{ resultSuccess ? t('tool.status.done') : t('tool.status.failed') }}
       </span>
       <span v-else-if="info.progressStep" class="text-xs text-blue-500 animate-pulse truncate max-w-[180px]">{{ info.progressStep }}</span>
-      <span v-else class="text-xs text-yellow-600 animate-pulse">执行中...</span>
+      <span v-else class="text-xs text-yellow-600 animate-pulse">{{ t('tool.status.running') }}</span>
       <span class="text-gray-400 text-xs">{{ info.collapsed ? '▶' : '▼' }}</span>
     </button>
 
@@ -28,9 +28,9 @@
       <!-- profile_get 画像展示 -->
       <template v-if="info.tool === 'profile_get' && resultData">
         <div class="text-xs text-gray-500 mb-1.5">
-          已收集 {{ resultData.filled_count ?? 0 }}/{{ resultData.total ?? 9 }} 项
-          <span v-if="resultData.ready" class="text-green-600 ml-1">画像完整</span>
-          <span v-else class="text-orange-500 ml-1">待补充</span>
+          {{ t('tool.profile.collected', { filled: resultData.filled_count ?? 0, total: resultData.total ?? 9 }) }}
+          <span v-if="resultData.ready" class="text-green-600 ml-1">{{ t('tool.profile.complete') }}</span>
+          <span v-else class="text-orange-500 ml-1">{{ t('tool.profile.incomplete') }}</span>
         </div>
         <div v-if="resultData.filled && Object.keys(resultData.filled).length" class="space-y-1 mb-2">
           <div
@@ -64,14 +64,14 @@
             <span
               v-if="resultData.updated_slots?.includes(key)"
               class="text-xs text-green-500 ml-auto"
-            >新</span>
+            >{{ t('tool.shopping.new') }}</span>
           </div>
         </div>
       </template>
 
       <!-- dish_query 结果 -->
       <template v-else-if="info.tool === 'dish_query' && dishes.length">
-        <div class="text-xs text-gray-500 mb-1.5">查询到 {{ resultTotal }} 道菜品</div>
+        <div class="text-xs text-gray-500 mb-1.5">{{ t('tool.dish.found', { count: resultTotal }) }}</div>
         <div class="space-y-2">
           <div
             v-for="dish in dishes"
@@ -91,7 +91,7 @@
               <span v-if="dish.regional && dish.regional !== '通用家常'" class="tag tag-region">{{ dish.regional }}</span>
             </div>
             <div v-if="dish.main_ingredients?.length" class="text-xs text-gray-500">
-              食材：{{ ingredientNames(dish.main_ingredients) }}
+              {{ t('tool.dish.ingredients', { list: ingredientNames(dish.main_ingredients) }) }}
             </div>
           </div>
         </div>
@@ -100,16 +100,16 @@
       <!-- meal_recommend 结果 -->
       <template v-else-if="info.tool === 'meal_recommend' && mealPlan.length">
         <div class="text-xs text-gray-500 mb-1.5">
-          {{ mealPlan.length }}天规划 · 日均 {{ avgCalories }} kcal
+          {{ t('tool.meal.plan', { days: mealPlan.length, avg: avgCalories }) }}
         </div>
         <div v-for="day in mealPlan" :key="day.day" class="bg-white rounded-lg p-2.5 border border-gray-100 mb-2 last:mb-0">
           <div v-if="mealPlan.length > 1" class="text-xs font-medium text-gray-600 mb-1.5">
-            第{{ day.day }}天 · {{ day.total_calories }} kcal
+            {{ t('tool.meal.day', { day: day.day, cal: day.total_calories }) }}
           </div>
           <div class="space-y-1.5">
-            <MealRow icon="🌅" label="早餐" :items="day.breakfast" :calories="day.breakfast_calories" />
-            <MealRow icon="☀️" label="午餐" :items="day.lunch" :calories="day.lunch_calories" />
-            <MealRow icon="🌙" label="晚餐" :items="day.dinner" :calories="day.dinner_calories" />
+            <MealRow icon="🌅" :label="t('tool.meal.breakfast')" :items="day.breakfast" :calories="day.breakfast_calories" />
+            <MealRow icon="☀️" :label="t('tool.meal.lunch')" :items="day.lunch" :calories="day.lunch_calories" />
+            <MealRow icon="🌙" :label="t('tool.meal.dinner')" :items="day.dinner" :calories="day.dinner_calories" />
           </div>
         </div>
       </template>
@@ -118,15 +118,15 @@
       <template v-else-if="info.tool === 'shopping_list' && shoppingList">
         <div class="flex items-center justify-between mb-1.5">
           <div class="text-xs text-gray-500">
-            共 {{ shoppingList.total_items }} 种食材
+            {{ t('tool.shopping.total', { count: shoppingList.total_items }) }}
             <span v-if="checkedCount < shoppingList.total_items" class="text-blue-600 ml-1">
-              · 已选 {{ checkedCount }}
+              {{ t('tool.shopping.selected', { count: checkedCount }) }}
             </span>
           </div>
           <button
             class="text-xs text-blue-600 hover:text-blue-800"
             @click="toggleAllChecked"
-          >{{ allChecked ? '取消全选' : '全选' }}</button>
+          >{{ allChecked ? t('tool.shopping.unselectAll') : t('tool.shopping.selectAll') }}</button>
         </div>
         <div class="space-y-1.5">
           <div
@@ -152,7 +152,7 @@
                   :class="{ 'line-through text-gray-400': checkedItems[item.name] === false }"
                 >{{ item.name }}</span>
                 <span v-if="item.amount" class="text-xs text-gray-400">{{ item.amount }}</span>
-                <span v-if="item.count > 1" class="text-xs text-gray-400">×{{ item.count }}道菜</span>
+                <span v-if="item.count > 1" class="text-xs text-gray-400">×{{ t('tool.tag.dishes', { count: item.count }) }}</span>
               </label>
             </div>
           </div>
@@ -163,33 +163,33 @@
       <template v-else-if="info.tool === 'address_get' && resultData">
         <div v-if="resultData.found" class="bg-white rounded-lg p-2.5 border border-gray-100 space-y-1">
           <div class="flex items-center gap-2">
-            <span class="text-xs text-gray-500 w-14 shrink-0">收货人</span>
-            <span class="text-xs text-gray-800 font-medium">{{ resultData.name || '未设置' }}</span>
+            <span class="text-xs text-gray-500 w-14 shrink-0">{{ t('tool.address.recipient') }}</span>
+            <span class="text-xs text-gray-800 font-medium">{{ resultData.name || t('tool.address.notSet') }}</span>
           </div>
           <div class="flex items-center gap-2">
-            <span class="text-xs text-gray-500 w-14 shrink-0">手机号</span>
+            <span class="text-xs text-gray-500 w-14 shrink-0">{{ t('tool.address.phone') }}</span>
             <span class="text-xs text-gray-800 font-medium">{{ resultData.phone }}</span>
           </div>
           <div class="flex items-center gap-2">
-            <span class="text-xs text-gray-500 w-14 shrink-0">地址</span>
+            <span class="text-xs text-gray-500 w-14 shrink-0">{{ t('tool.address.address') }}</span>
             <span class="text-xs text-gray-800 font-medium">{{ resultData.address }}</span>
           </div>
         </div>
-        <div v-else class="text-xs text-orange-500">暂无收货地址</div>
+        <div v-else class="text-xs text-orange-500">{{ t('tool.address.noAddress') }}</div>
       </template>
 
       <!-- address_save 保存收货地址 -->
       <template v-else-if="info.tool === 'address_save' && resultData">
         <div class="bg-white rounded-lg p-2.5 border border-gray-100 space-y-1">
           <div class="flex items-center gap-2">
-            <span class="text-xs text-green-600">已保存收货地址</span>
+            <span class="text-xs text-green-600">{{ t('tool.address.saved') }}</span>
           </div>
           <div v-if="resultData.phone" class="flex items-center gap-2">
-            <span class="text-xs text-gray-500 w-14 shrink-0">手机号</span>
+            <span class="text-xs text-gray-500 w-14 shrink-0">{{ t('tool.address.phone') }}</span>
             <span class="text-xs text-gray-800 font-medium">{{ resultData.phone }}</span>
           </div>
           <div v-if="resultData.address" class="flex items-center gap-2">
-            <span class="text-xs text-gray-500 w-14 shrink-0">地址</span>
+            <span class="text-xs text-gray-500 w-14 shrink-0">{{ t('tool.address.address') }}</span>
             <span class="text-xs text-gray-800 font-medium">{{ resultData.address }}</span>
           </div>
         </div>
@@ -204,7 +204,7 @@
             :key="p.index"
             class="flex items-center justify-between bg-white rounded px-2.5 py-1.5 border border-gray-100"
           >
-            <span class="text-xs text-gray-800 flex-1 truncate">{{ p.name || `商品${p.index}` }}</span>
+            <span class="text-xs text-gray-800 flex-1 truncate">{{ p.name || t('tool.hema.product', { index: p.index }) }}</span>
             <span v-if="p.price" class="text-xs text-orange-600 font-medium ml-2 shrink-0">{{ p.price }}</span>
           </div>
         </div>
@@ -214,7 +214,7 @@
       <template v-else-if="info.tool === 'hema_add_cart' && resultData">
         <div class="bg-white rounded-lg p-2.5 border border-gray-100">
           <div class="text-xs text-gray-700">{{ resultData.message }}</div>
-          <div v-if="resultData.cart_count" class="text-xs text-gray-500 mt-1">购物车数量: {{ resultData.cart_count }}</div>
+          <div v-if="resultData.cart_count" class="text-xs text-gray-500 mt-1">{{ t('tool.cart.total', { total: resultData.cart_count }) }}</div>
         </div>
       </template>
 
@@ -233,7 +233,7 @@
           </div>
         </div>
         <div v-if="resultData.total_price" class="text-xs text-right text-gray-600 mt-1.5 font-medium">
-          合计: {{ resultData.total_price }}
+          {{ t('tool.cart.total', { total: resultData.total_price }) }}
         </div>
       </template>
 
@@ -241,7 +241,7 @@
       <template v-else-if="info.tool === 'hema_set_location' && resultData">
         <div class="bg-white rounded-lg p-2.5 border border-gray-100">
           <div class="text-xs text-gray-700">{{ resultData.message }}</div>
-          <div v-if="resultData.current_location" class="text-xs text-gray-500 mt-1">当前: {{ resultData.current_location }}</div>
+          <div v-if="resultData.current_location" class="text-xs text-gray-500 mt-1">{{ t('tool.address.current', { location: resultData.current_location }) }}</div>
         </div>
       </template>
 
@@ -249,7 +249,7 @@
       <template v-else-if="info.tool === 'agent_call'">
         <div class="bg-white rounded-lg p-2.5 border border-gray-100">
           <div class="flex items-center gap-2 mb-1.5">
-            <span class="text-xs text-gray-500">调用</span>
+            <span class="text-xs text-gray-500">{{ t('tool.agent.call') }}</span>
             <span class="text-xs font-medium text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">{{ agentCallTarget }}</span>
             <span v-if="childCallStats" class="text-xs text-gray-400 ml-auto">{{ childCallStats }}</span>
           </div>
@@ -260,8 +260,8 @@
               @click="agentLogExpanded = !agentLogExpanded"
             >
               <span>{{ agentLogExpanded ? '▼' : '▶' }}</span>
-              <span>操作日志</span>
-              <span class="text-gray-300">{{ info.agentContent.split('\n').filter((l: string) => l.trim()).length }} 行</span>
+              <span>{{ t('tool.agent.log') }}</span>
+              <span class="text-gray-300">{{ t('tool.agent.logLines', { count: info.agentContent.split('\n').filter((l: string) => l.trim()).length }) }}</span>
             </button>
             <div v-if="agentLogExpanded" class="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed mt-1 pl-3 border-l-2 border-gray-200">{{ info.agentContent }}</div>
           </div>
@@ -318,10 +318,28 @@
             :request="info.inputRequest"
             @submit="handleInputSubmit"
           />
+          <!-- 购物车汇总（agent_call 完成后展示最终商品） -->
+          <div v-if="cartSummary" class="mt-2 rounded-lg border border-orange-200 bg-orange-50/50 p-2.5">
+            <div class="flex items-center gap-1.5 mb-1.5">
+              <span class="text-sm">🛒</span>
+              <span class="text-xs font-medium text-orange-700">{{ t('tool.cart.title') }}</span>
+            </div>
+            <div class="space-y-1">
+              <div
+                v-for="(item, idx) in cartSummary.items"
+                :key="idx"
+                class="flex items-center justify-between bg-white rounded px-2.5 py-1.5 border border-orange-100"
+              >
+                <span class="text-xs text-gray-800 flex-1 truncate">{{ item.name }}</span>
+                <span class="text-xs text-gray-500 mx-2">x{{ item.quantity }}</span>
+                <span v-if="item.price" class="text-xs text-orange-600 font-medium shrink-0">{{ item.price }}</span>
+              </div>
+            </div>
+          </div>
           <!-- 当前执行步骤 -->
           <div v-if="info.progressStep && !info.result" class="text-xs text-blue-500 animate-pulse">{{ info.progressStep }}</div>
           <!-- 等待中（无内容时） -->
-          <div v-else-if="!info.agentContent && !info.childCalls?.length && !info.result" class="text-xs text-blue-500 animate-pulse">执行中，请耐心等待...</div>
+          <div v-else-if="!info.agentContent && !info.childCalls?.length && !info.result" class="text-xs text-blue-500 animate-pulse">{{ t('tool.status.executing') }}</div>
           <!-- 完成后的错误 -->
           <div v-if="info.result?.error" class="text-xs text-red-500 mt-1">{{ info.result.error }}</div>
         </div>
@@ -345,10 +363,13 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { ToolCallInfo, InputRequest } from '../../types'
 import { submitInput } from '../../api/chat'
 import MealRow from './MealRow.vue'
 import InlineInput from './InlineInput.vue'
+
+const { t } = useI18n()
 
 interface ShoppingItem {
   name: string
@@ -358,7 +379,7 @@ interface ShoppingItem {
 }
 
 const props = defineProps<{ info: ToolCallInfo }>()
-defineEmits<{ toggle: [] }>()
+const emit = defineEmits<{ toggle: []; 'tool-data-change': [] }>()
 
 const agentLogExpanded = ref(false)
 
@@ -381,48 +402,36 @@ async function handleInputSubmit(request: InputRequest, value: string) {
   }
 }
 
-const AGENT_LABELS: Record<string, string> = {
-  purchasing_agent: '采购助手',
+const TOOL_ICONS: Record<string, string> = {
+  profile_get: '👤',
+  profile_save: '💾',
+  dish_query: '🔍',
+  meal_recommend: '📋',
+  shopping_list: '🛒',
+  address_get: '📍',
+  address_save: '📍',
+  agent_call: '🤖',
+  hema_set_location: '📍',
+  hema_search: '🔍',
+  hema_add_cart: '🛒',
+  hema_cart_status: '🛒',
 }
 
-const toolIcon = computed(() => {
-  const icons: Record<string, string> = {
-    profile_get: '👤',
-    profile_save: '💾',
-    dish_query: '🔍',
-    meal_recommend: '📋',
-    shopping_list: '🛒',
-    address_get: '📍',
-    address_save: '📍',
-    agent_call: '🤖',
-    hema_set_location: '📍',
-    hema_search: '🔍',
-    hema_add_cart: '🛒',
-    hema_cart_status: '🛒',
-  }
-  return icons[props.info.tool] ?? '🔧'
+const toolIcon = computed(() => TOOL_ICONS[props.info.tool] ?? '🔧')
+
+const agentCallTarget = computed(() => {
+  return props.info.params?.target_agent ?? t('tool.agent.unknown')
 })
 
 const toolLabel = computed(() => {
-  const labels: Record<string, string> = {
-    profile_get: '获取用户画像',
-    profile_save: '保存用户画像',
-    dish_query: '菜品查询',
-    meal_recommend: '餐食规划',
-    shopping_list: '购物清单',
-    address_get: '查询配送区域',
-    address_save: '保存配送区域',
-    agent_call: `调用${AGENT_LABELS[agentCallTarget.value] ?? agentCallTarget.value}`,
-    hema_set_location: '设置盒马地址',
-    hema_search: '盒马搜索商品',
-    hema_add_cart: '加入盒马购物车',
-    hema_cart_status: '查看盒马购物车',
+  const key = `tool.${props.info.tool}`
+  if (props.info.tool === 'agent_call') {
+    const agentKey = `tool.agent.${agentCallTarget.value}`
+    const agentName = t(agentKey) !== agentKey ? t(agentKey) : agentCallTarget.value
+    return t('tool.agent_call', { target: agentName })
   }
-  return labels[props.info.tool] ?? props.info.tool
-})
-
-const agentCallTarget = computed(() => {
-  return props.info.params?.target_agent ?? '未知'
+  const label = t(key)
+  return label !== key ? label : props.info.tool
 })
 
 // ── childCalls helpers ──────────────────────────
@@ -435,13 +444,13 @@ const CHILD_ICONS: Record<string, string> = {
   address_save: '📍',
 }
 
-const CHILD_LABELS: Record<string, string> = {
-  hema_set_location: '设置地址',
-  hema_search: '搜索商品',
-  hema_add_cart: '加入购物车',
-  hema_cart_status: '购物车状态',
-  address_get: '查询配送区域',
-  address_save: '保存配送区域',
+const CHILD_LABEL_KEYS: Record<string, string> = {
+  hema_set_location: 'tool.child.setLocation',
+  hema_search: 'tool.child.search',
+  hema_add_cart: 'tool.child.addCart',
+  hema_cart_status: 'tool.child.cartStatus',
+  address_get: 'tool.child.addressGet',
+  address_save: 'tool.child.addressSave',
 }
 
 /** 将 childCalls 按 groupId 分组（同 groupId 归入同组，无 groupId 独立成组） */
@@ -478,11 +487,41 @@ const childCallStats = computed(() => {
   const calls = props.info.childCalls
   if (!calls?.length) return ''
   const done = calls.filter((c) => c.result).length
-  return `${done}/${calls.length} 完成`
+  return t('tool.agent.stats', { done, total: calls.length })
+})
+
+/** 从 childCalls 中提取购物车汇总（agent_call 完成后展示） */
+const cartSummary = computed(() => {
+  if (props.info.tool !== 'agent_call' || !props.info.result?.success) return null
+  const children = props.info.childCalls ?? []
+
+  // 优先从 hema_cart_status 提取完整购物车
+  const cartStatus = [...children].reverse().find(
+    (c) => c.tool === 'hema_cart_status' && c.result?.success && c.result.data?.items?.length,
+  )
+  if (cartStatus) {
+    return {
+      items: cartStatus.result!.data.items as { name: string; quantity: number; price: string }[],
+      totalPrice: cartStatus.result!.data.total_price as string,
+    }
+  }
+
+  // 兜底：从 hema_add_cart 成功结果聚合
+  const addResults = children.filter(
+    (c) => c.tool === 'hema_add_cart' && c.result?.success && c.result.data?.product_name,
+  )
+  if (!addResults.length) return null
+
+  const items = addResults.map((c) => ({
+    name: c.result!.data.product_name as string,
+    quantity: (c.result!.data.quantity ?? 1) as number,
+    price: '',
+  }))
+  return { items, totalPrice: '' }
 })
 
 function isSkipped(child: ToolCallInfo): boolean {
-  return !!child.result?.data?.skipped
+  return !!child.result?.data?.skipped || !!child.result?.data?.skipped_reason
 }
 
 function childCallClass(child: ToolCallInfo): string {
@@ -499,12 +538,13 @@ function childCallIcon(child: ToolCallInfo): string {
 }
 
 function childCallLabel(child: ToolCallInfo): string {
-  const base = CHILD_LABELS[child.tool] ?? child.tool
+  const key = CHILD_LABEL_KEYS[child.tool]
+  const base = key ? t(key) : child.tool
   if (child.tool === 'hema_search' && child.params?.keyword) {
     return `${base}：${child.params.keyword}`
   }
-  if (child.tool === 'hema_add_cart' && child.params?.product_name) {
-    return `${base}：${child.params.product_name}`
+  if (child.tool === 'hema_add_cart') {
+    return base
   }
   return base
 }
@@ -512,42 +552,68 @@ function childCallLabel(child: ToolCallInfo): string {
 function childCallSummary(child: ToolCallInfo): string {
   const r = child.result
   if (!r) return ''
-  if (isSkipped(child)) return '已跳过'
+  if (isSkipped(child)) {
+    const reason = r.data?.skipped_reason
+    if (reason === 'not_found') return t('tool.child.notFound')
+    if (reason === 'search_error') return t('tool.child.searchError')
+    if (reason === 'agent_skip') {
+      // 检查目标商品是否已在其他组成功加购
+      const targetName = child.params?.product_name
+      if (targetName) {
+        const allChildren = props.info.childCalls ?? []
+        const addedElsewhere = allChildren.find(
+          (c) => c !== child
+            && c.tool === 'hema_add_cart'
+            && c.result?.success
+            && c.result.data?.product_name
+            && (c.result.data.product_name.includes(targetName) || targetName.includes(c.result.data.product_name)),
+        )
+        if (addedElsewhere) {
+          return t('tool.child.alreadyAdded')
+        }
+      }
+      return t('tool.child.agentSkip')
+    }
+    return t('tool.child.skipped')
+  }
   if (r.error) return r.error
   const d = r.data
   if (!d) return ''
   if (child.tool === 'hema_search' && d.products?.length != null) {
-    return `找到 ${d.products.length} 件商品`
+    return t('tool.child.found', { count: d.products.length })
   }
   if (child.tool === 'hema_add_cart') {
-    return ''
+    if (r.success && d.product_name) return `${d.product_name} x${d.quantity ?? 1}`
+    if (r.error) return r.error
+    return d.message ?? ''
   }
   if (child.tool === 'hema_set_location' && d.address) {
     return d.address
   }
   if (child.tool === 'hema_cart_status' && d.total_items != null) {
-    return `${d.total_items} 件, ¥${d.total_price ?? '—'}`
+    return t('tool.child.items', { count: d.total_items, price: d.total_price ?? '—' })
   }
   if (child.tool === 'address_get') {
-    return d.found ? d.address ?? '已找到' : '未保存'
+    return d.found ? d.address ?? t('tool.child.addressFound') : t('tool.child.addressNotSaved')
   }
   return ''
 }
 
-const SLOT_LABELS: Record<string, string> = {
-  family_size: '家庭人数',
-  family_members: '家庭成员',
-  taste: '口味偏好',
-  cuisine: '偏好菜系',
-  restrictions: '饮食限制',
-  health_goal: '健康目标',
-  cooking_skill: '厨艺水平',
-  budget: '预算倾向',
-  scene: '餐食场景',
+const SLOT_LABEL_KEYS: Record<string, string> = {
+  family_size: 'tool.slot.family_size',
+  family_members: 'tool.slot.family_members',
+  taste: 'tool.slot.taste',
+  cuisine: 'tool.slot.cuisine',
+  restrictions: 'tool.slot.restrictions',
+  health_goal: 'tool.slot.health_goal',
+  cooking_skill: 'tool.slot.cooking_skill',
+  budget: 'tool.slot.budget',
+  scene: 'tool.slot.scene',
 }
 
 function slotLabel(key: string): string {
-  return SLOT_LABELS[key] ?? key
+  const k = SLOT_LABEL_KEYS[key]
+  return k ? t(k) : key
 }
 
 const resultSuccess = computed(() => {
@@ -568,21 +634,24 @@ const paramTags = computed(() => {
   if (p.cooking_method) tags.push(p.cooking_method)
   if (p.goal) tags.push(p.goal)
   if (p.max_calories) tags.push(`≤${p.max_calories}kcal`)
-  if (p.daily_calories) tags.push(`日均${p.daily_calories}kcal`)
-  if (p.days) tags.push(`${p.days}天`)
+  if (p.daily_calories) tags.push(t('tool.tag.dailyCal', { cal: p.daily_calories }))
+  if (p.days) tags.push(t('tool.tag.days', { days: p.days }))
   if (p.suitability) tags.push(p.suitability)
-  if (p.exclude_flavors?.length) tags.push(...p.exclude_flavors.map((f: string) => `不${f}`))
-  if (p.exclude_ingredients?.length) tags.push(...p.exclude_ingredients.map((i: string) => `忌${i}`))
+  if (p.exclude_flavors?.length) tags.push(...p.exclude_flavors.map((f: string) => t('tool.tag.excludeFlavor', { flavor: f })))
+  if (p.exclude_ingredients?.length) tags.push(...p.exclude_ingredients.map((i: string) => t('tool.tag.excludeIngredient', { ingredient: i })))
   if (p.cuisine_preference?.length) tags.push(...p.cuisine_preference)
-  if (p.dish_names?.length) tags.push(`${p.dish_names.length}道菜`)
+  if (p.dish_names?.length) tags.push(t('tool.tag.dishes', { count: p.dish_names.length }))
   if (p.dietary_goal) tags.push(p.dietary_goal)
   if (p.tags?.length) tags.push(...p.tags)
   if (p.phone) tags.push(p.phone)
   if (p.address) tags.push(p.address.length > 20 ? p.address.slice(0, 20) + '...' : p.address)
   if (p.product_name) tags.push(p.product_name)
-  if (p.product_index != null) tags.push(`商品#${p.product_index}`)
+  if (p.product_index != null) tags.push(t('tool.tag.product', { index: p.product_index }))
   if (p.quantity && p.quantity > 1) tags.push(`x${p.quantity}`)
-  if (p.target_agent) tags.push(AGENT_LABELS[p.target_agent] ?? p.target_agent)
+  if (p.target_agent) {
+    const agentKey = `tool.agent.${p.target_agent}`
+    tags.push(t(agentKey) !== agentKey ? t(agentKey) : p.target_agent)
+  }
   return tags
 })
 
@@ -649,7 +718,8 @@ const allChecked = computed(() => {
 })
 
 function toggleItem(name: string) {
-  checkedItems[name] = checkedItems[name] === false ? true : false
+  checkedItems[name] = checkedItems[name] === false
+  syncCheckedToResult()
 }
 
 function toggleAllChecked() {
@@ -661,6 +731,20 @@ function toggleAllChecked() {
       checkedItems[item.name] = target
     }
   }
+  syncCheckedToResult()
+}
+
+/** 将勾选状态同步回 result.data，并通知父组件持久化 */
+function syncCheckedToResult() {
+  const d = props.info.result?.data
+  if (!d?.shopping_list) return
+  const list = d.shopping_list as Record<string, ShoppingItem[]>
+  for (const items of Object.values(list)) {
+    for (const item of items) {
+      item.checked = checkedItems[item.name] !== false
+    }
+  }
+  emit('tool-data-change')
 }
 
 /** 返回已勾选的食材列表（供父组件在"一键加购物车"时读取） */

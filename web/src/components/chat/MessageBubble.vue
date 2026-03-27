@@ -15,6 +15,7 @@
             ref="toolCardRefs"
             :info="tc"
             @toggle="$emit('toggleTool', i)"
+            @tool-data-change="$emit('toolDataChange')"
           />
         </div>
         <!-- thinking 状态（工具完成后等待 LLM） -->
@@ -61,7 +62,7 @@ import ToolCallCard from './ToolCallCard.vue'
 import QuickReply from './QuickReply.vue'
 
 const props = defineProps<{ msg: Message; streaming?: boolean }>()
-const emit = defineEmits<{ toggleTool: [index: number]; quickReply: [value: string] }>()
+const emit = defineEmits<{ toggleTool: [index: number]; quickReply: [value: string]; toolDataChange: [] }>()
 
 const toolCardRefs = ref<InstanceType<typeof ToolCallCard>[]>([])
 

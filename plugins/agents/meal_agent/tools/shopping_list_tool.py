@@ -8,6 +8,7 @@ from typing import Any
 import litellm
 from loguru import logger
 
+from core.i18n import t, get_locale
 from core.interfaces.tool import BaseTool, ToolResult
 from tools.dish_query_tool import DISH_DATABASE
 
@@ -64,6 +65,7 @@ async def _llm_generate_merged_list(
     if not dish_names:
         return []
 
+    logger.debug(f"Generating merged list with locale={get_locale()}")
     dishes_text = "、".join(dish_names)
     prompt = f"""请为以下全部菜品生成一份**合并后**的食材采购清单。
 
@@ -141,7 +143,7 @@ class ShoppingListTool(BaseTool):
 
     @property
     def description(self) -> str:
-        return "根据菜名列表，查找所有食材（主料+辅料）并生成分类采购清单。在 meal_recommend 之后调用。"
+        return t("tool.shopping_list.desc")
 
     @property
     def parameters_schema(self) -> dict:
@@ -151,7 +153,7 @@ class ShoppingListTool(BaseTool):
                 "dish_names": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "菜品名称列表，从 meal_recommend 结果中提取",
+                    "description": t("tool.param.dish_names"),
                 },
             },
             "required": ["dish_names"],

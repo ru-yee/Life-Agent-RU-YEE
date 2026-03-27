@@ -9,6 +9,7 @@ from typing import Any, TYPE_CHECKING
 
 from loguru import logger
 
+from core.i18n import t
 from core.interfaces.tool import BaseTool, ToolResult
 
 if TYPE_CHECKING:
@@ -131,11 +132,12 @@ class _PlanTracker:
         self._matched: set[int] = set()
         self._current_group: str | None = None
         self._tcid_to_gid: dict[str, str] = {}
+        self._auto_idx = 0  # 无 plan 时自动分配 group_id 的计数器
 
     def resolve(self, tool_name: str, params: dict[str, Any], tool_call_id: str) -> str | None:
         """根据工具调用信息，匹配计划项并返回 group_id"""
         if not self._items:
-            return None
+            return self._resolve_auto(tool_name, tool_call_id)
 
         gid: str | None = None
         incoming_kw = (params.get("keyword") or params.get("product_name") or "").lower()
@@ -197,6 +199,25 @@ class _PlanTracker:
         """通过 tool_call_id 查找已知的 group_id"""
         return self._tcid_to_gid.get(tool_call_id)
 
+    def _resolve_auto(self, tool_name: str, tool_call_id: str) -> str | None:
+        """无预生成计划时，自动为 search/add_cart 分配 group_id"""
+        gid: str | None = None
+        if tool_name == "hema_search":
+            gid = f"auto_{self._auto_idx}"
+            self._current_group = gid
+            self._auto_idx += 1
+        elif tool_name == "hema_add_cart":
+            gid = self._current_group
+        elif tool_name in ("address_get", "address_save"):
+            gid = "setup_0"
+        elif tool_name == "hema_set_location":
+            gid = "setup_1"
+        elif tool_name == "hema_cart_status":
+            gid = "cart_status"
+        if gid and tool_call_id:
+            self._tcid_to_gid[tool_call_id] = gid
+        return gid
+
 
 class AgentCommManager:
     """管理 Agent 间通信：权限校验、调用执行、日志记录"""
@@ -231,21 +252,21 @@ class AgentCommManager:
         """校验 source 是否有权调用 target，返回错误消息或 None"""
         manifest = self._registry.get_manifest(source)
         if not manifest:
-            return f"源 Agent '{source}' 的 manifest 未找到"
+            return t("comm.error.manifest_not_found", source=source)
         allowed = getattr(manifest, "allowed_agents", [])
         if "*" in allowed:
             return None
         if target not in allowed:
-            return f"Agent '{source}' 无权限调用 '{target}'（allowed_agents 中未声明）"
+            return t("comm.error.no_permission", source=source, target=target)
         return None
 
     def check_call_chain(self, session_id: str, source: str, target: str) -> str | None:
         """检测循环调用和深度限制，返回错误消息或 None"""
         chain = self._call_chains.get(session_id, [])
         if target in chain:
-            return f"检测到循环调用: {'→'.join(chain)}→{target}"
+            return t("comm.error.circular_call", chain="→".join(chain), target=target)
         if len(chain) >= self.MAX_CALL_DEPTH:
-            return f"调用深度超过限制（最大 {self.MAX_CALL_DEPTH} 层）"
+            return t("comm.error.depth_exceeded", max_depth=self.MAX_CALL_DEPTH)
         return None
 
     def set_sse_callback(self, callback: Any) -> None:
@@ -293,8 +314,11 @@ class AgentListTool(BaseTool):
     """系统工具：列出当前已加载的所有 Agent"""
 
     name = "agent_list"
-    description = "列出当前已加载的所有 Agent 及其能力"
     parameters_schema = {"type": "object", "properties": {}}
+
+    @property
+    def description(self) -> str:
+        return t("comm.tool.agent_list.desc")
 
     def __init__(self, comm_manager: AgentCommManager) -> None:
         self._comm = comm_manager
@@ -308,25 +332,31 @@ class AgentCallTool(BaseTool):
     """系统工具：调用目标 Agent"""
 
     name = "agent_call"
-    description = "调用另一个 Agent 执行任务。需要指定目标 Agent 名称和请求消息。"
-    parameters_schema = {
-        "type": "object",
-        "properties": {
-            "target_agent": {
-                "type": "string",
-                "description": "目标 Agent 名称",
+
+    @property
+    def description(self) -> str:
+        return t("comm.tool.agent_call.desc")
+
+    @property
+    def parameters_schema(self) -> dict:
+        return {
+            "type": "object",
+            "properties": {
+                "target_agent": {
+                    "type": "string",
+                    "description": t("comm.tool.agent_call.param.target"),
+                },
+                "message": {
+                    "type": "string",
+                    "description": t("comm.tool.agent_call.param.message"),
+                },
+                "context": {
+                    "type": "object",
+                    "description": t("comm.tool.agent_call.param.context"),
+                },
             },
-            "message": {
-                "type": "string",
-                "description": "发送给目标 Agent 的自然语言请求",
-            },
-            "context": {
-                "type": "object",
-                "description": "可选的上下文数据",
-            },
-        },
-        "required": ["target_agent", "message"],
-    }
+            "required": ["target_agent", "message"],
+        }
 
     def __init__(self, comm_manager: AgentCommManager, source_agent: str) -> None:
         self._comm = comm_manager
@@ -350,7 +380,7 @@ class AgentCallTool(BaseTool):
         # 3. 查找目标 Agent
         target = self._comm._registry.get_agent(target_name)
         if not target:
-            return ToolResult(success=False, data=None, error=f"Agent '{target_name}' 未找到")
+            return ToolResult(success=False, data=None, error=t("orchestrator.error.agent_not_found", agent=target_name))
 
         # 4. SSE 通知（开始委派）— 通过 _emit_sse 实时推送
         self._emit_sse("agent_delegate", {
@@ -363,12 +393,16 @@ class AgentCallTool(BaseTool):
         plan: list[dict[str, Any]] = []
         if target_name == "purchasing_agent":
             plan = _build_purchase_plan(message)
-            if plan:
+            # 只有 setup 项没有食材 → 无效计划，不发送
+            has_food = any(item["tool"] == "hema_search" for item in plan)
+            if plan and has_food:
                 self._emit_sse("agent_progress", {
                     "agent": target_name,
                     "type": "plan",
                     "items": plan,
                 })
+            else:
+                plan = []
         tracker = _PlanTracker(plan)
 
         # 5. 流式执行 — 逐步转发子 Agent 的 SSE 事件给用户
@@ -380,6 +414,8 @@ class AgentCallTool(BaseTool):
         start_ms = int(time.time() * 1000)
 
         collected: dict[str, Any] = {"content": "", "tool_results": []}
+        # 记录每个 tool_call 的 params 和 group_id，用于历史恢复
+        _tc_meta: dict[str, dict[str, Any]] = {}
         try:
             async def _stream_and_collect():
                 async for event in target.run(message, session_id):
@@ -396,6 +432,10 @@ class AgentCallTool(BaseTool):
                         tcid = event.data.get("tool_call_id", "")
                         params = event.data.get("params", {})
                         gid = tracker.resolve(tool, params, tcid)
+                        # 记录 params 和 group_id 供历史恢复
+                        _tc_meta[tcid] = {"params": params}
+                        if gid:
+                            _tc_meta[tcid]["group_id"] = gid
                         payload: dict[str, Any] = {
                             "agent": target_name,
                             "type": "tool_call",
@@ -420,8 +460,15 @@ class AgentCallTool(BaseTool):
                             payload["group_id"] = gid
                         self._emit_sse("agent_progress", payload)
                     elif event.event == "tool_output_done":
-                        collected["tool_results"].append(event.data)
                         tcid = event.data.get("tool_call_id", "")
+                        # 合并 params 和 group_id 到 tool_results（供历史恢复）
+                        enriched = {**event.data}
+                        meta = _tc_meta.get(tcid, {})
+                        if meta.get("params"):
+                            enriched["params"] = meta["params"]
+                        if meta.get("group_id"):
+                            enriched["group_id"] = meta["group_id"]
+                        collected["tool_results"].append(enriched)
                         gid = tracker.get_group(tcid)
                         payload = {
                             "agent": target_name,
@@ -478,22 +525,25 @@ class AgentCallTool(BaseTool):
                     if err:
                         first_error = err
                         break
+                fail_data: dict[str, Any] = {
+                    "summary": collected["content"],
+                    "tool_results": tool_results,
+                }
+                if plan:
+                    fail_data["plan"] = plan
                 return ToolResult(
                     success=False,
-                    data={
-                        "summary": collected["content"],
-                        "tool_results": tool_results,
-                    },
-                    error=f"采购失败: {first_error}\n\n请将以上完整错误信息原样告知用户，不要概括或简化。",
+                    data=fail_data,
+                    error=t("comm.error.purchase_failed", error=first_error),
                 )
 
-            return ToolResult(
-                success=True,
-                data={
-                    "summary": collected["content"],
-                    "tool_results": collected["tool_results"],
-                },
-            )
+            result_data: dict[str, Any] = {
+                "summary": collected["content"],
+                "tool_results": collected["tool_results"],
+            }
+            if plan:
+                result_data["plan"] = plan
+            return ToolResult(success=True, data=result_data)
         except asyncio.TimeoutError:
             duration_ms = int(time.time() * 1000) - start_ms
             await self._comm.log_message(
@@ -507,7 +557,7 @@ class AgentCallTool(BaseTool):
             )
             return ToolResult(
                 success=False, data=None,
-                error=f"调用 {target_name} 超时（{timeout}s）",
+                error=t("comm.error.call_timeout", target=target_name, timeout=timeout),
             )
         except Exception as e:
             duration_ms = int(time.time() * 1000) - start_ms
@@ -523,7 +573,7 @@ class AgentCallTool(BaseTool):
             error_msg = str(e)
             return ToolResult(
                 success=False, data=None,
-                error=f"调用 {target_name} 失败: {error_msg}\n\n请将以上完整错误信息原样告知用户，不要概括或简化。",
+                error=t("comm.error.call_failed", target=target_name, error=error_msg),
             )
         finally:
             if chain and chain[-1] == target_name:

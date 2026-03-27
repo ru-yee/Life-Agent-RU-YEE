@@ -1,3 +1,5 @@
+import { localeHeaders } from './locale'
+
 export interface OpeningConfig {
   agent_name: string
   agent_avatar: string
@@ -7,7 +9,7 @@ export interface OpeningConfig {
 
 export async function fetchOpening(): Promise<OpeningConfig | null> {
   try {
-    const res = await fetch('/api/chat/opening')
+    const res = await fetch('/api/chat/opening', { headers: localeHeaders() })
     if (!res.ok) return null
     const json = await res.json()
     return json.success ? json.data : null
@@ -17,7 +19,7 @@ export async function fetchOpening(): Promise<OpeningConfig | null> {
 }
 
 export interface HistoryResult {
-  data: { role: string; content: string; tool_calls?: any[] }[]
+  data: { id?: number; role: string; content: string; created_at?: string; tool_calls?: any[] }[]
   total: number
 }
 
@@ -32,7 +34,7 @@ export async function fetchHistory(
       limit: String(limit),
       offset: String(offset),
     })
-    const res = await fetch(`/api/chat/history?${params}`)
+    const res = await fetch(`/api/chat/history?${params}`, { headers: localeHeaders() })
     if (!res.ok) return { data: [], total: 0 }
     const json = await res.json()
     return json.success
@@ -46,7 +48,10 @@ export async function fetchHistory(
 export async function clearHistory(sessionId: string): Promise<boolean> {
   try {
     const params = new URLSearchParams({ session_id: sessionId })
-    const res = await fetch(`/api/chat/history?${params}`, { method: 'DELETE' })
+    const res = await fetch(`/api/chat/history?${params}`, {
+      method: 'DELETE',
+      headers: localeHeaders(),
+    })
     if (!res.ok) return false
     const json = await res.json()
     return json.success === true
@@ -59,8 +64,26 @@ export async function submitInput(requestId: string, value: string): Promise<boo
   try {
     const res = await fetch('/api/chat/input', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...localeHeaders() },
       body: JSON.stringify({ request_id: requestId, value }),
+    })
+    if (!res.ok) return false
+    const json = await res.json()
+    return json.success === true
+  } catch {
+    return false
+  }
+}
+
+export async function updateMessageToolData(
+  messageId: number,
+  toolData: any[],
+): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/chat/message/${messageId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...localeHeaders() },
+      body: JSON.stringify({ tool_data: toolData }),
     })
     if (!res.ok) return false
     const json = await res.json()
@@ -79,7 +102,7 @@ export async function streamChat(
   try {
     const res = await fetch('/api/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...localeHeaders() },
       body: JSON.stringify({ message, session_id: sessionId }),
       signal,
     })

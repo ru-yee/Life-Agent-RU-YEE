@@ -38,9 +38,10 @@ function turnsToMessages(turns: any[]): Message[] {
   return turns.map((turn: any) => {
     const msg: Message = {
       id: uid(),
+      dbId: turn.id ?? undefined,
       role: turn.role as 'user' | 'assistant',
       content: turn.content,
-      timestamp: Date.now(),
+      timestamp: turn.created_at ? new Date(turn.created_at).getTime() : Date.now(),
     }
     if (turn.tool_calls?.length) {
       msg.toolCalls = turn.tool_calls.map((tc: any) => {
@@ -55,14 +56,68 @@ function turnsToMessages(turns: any[]): Message[] {
         if (tc.tool === 'agent_call' && tc.result?.data) {
           const d = tc.result.data
           if (d.summary) info.agentContent = d.summary
-          // 从 tool_results 恢复 childCalls
+
+          // 用 tool_results 建立 tool_call_id → result 的索引
+          const resultMap = new Map<string, any>()
+          const resultsByGroupTool = new Map<string, any>()
           if (d.tool_results?.length) {
+            for (const tr of d.tool_results) {
+              if (tr.tool_call_id) resultMap.set(tr.tool_call_id, tr)
+              if (tr.group_id && tr.tool) {
+                resultsByGroupTool.set(`${tr.group_id}:${tr.tool}`, tr)
+              }
+            }
+          }
+
+          if (d.plan?.length) {
+            // 从 plan 构建完整骨架，用 tool_results 填充实际结果
+            const notFoundResult = { success: false, data: { skipped_reason: 'not_found' }, error: null }
+            const searchErrorResult = { success: false, data: { skipped_reason: 'search_error' }, error: null }
+            const agentSkipResult = { success: true, data: { skipped_reason: 'agent_skip' }, error: null }
+            info.childCalls = d.plan.map((item: any) => {
+              const gid = item.group_id ?? ''
+              const key = `${gid}:${item.tool}`
+              const tr = resultsByGroupTool.get(key)
+              let result = tr?.result ?? (item.done ? item.result : undefined)
+
+              // plan 中 add_cart 无实际结果 → 检查同组 search 状态，推断跳过原因
+              if (!result && item.tool === 'hema_add_cart' && gid) {
+                const searchTr = resultsByGroupTool.get(`${gid}:hema_search`)
+                if (searchTr?.result) {
+                  const sr = searchTr.result
+                  if (!sr.success) {
+                    // search 本身报错（设备断连等）
+                    result = searchErrorResult
+                  } else if (!sr.data?.products?.length) {
+                    // search 成功但无商品
+                    result = notFoundResult
+                  } else {
+                    result = agentSkipResult
+                  }
+                } else if (d.tool_results?.length) {
+                  // agent_call 已完成但 add_cart 无结果 → agent 跳过
+                  result = agentSkipResult
+                }
+              }
+
+              return {
+                toolCallId: tr?.tool_call_id,
+                tool: item.tool,
+                params: tr?.params ?? item.params ?? {},
+                result,
+                collapsed: true,
+                groupId: gid || undefined,
+              } as ToolCallInfo
+            })
+          } else if (d.tool_results?.length) {
+            // 无 plan 时直接从 tool_results 恢复
             info.childCalls = d.tool_results.map((tr: any) => ({
               toolCallId: tr.tool_call_id,
               tool: tr.tool ?? '',
-              params: {},
+              params: tr.params ?? {},
               result: tr.result,
               collapsed: true,
+              groupId: tr.group_id,
             }))
           }
         }
@@ -352,6 +407,28 @@ export function useSSE() {
                 const ci = findCall(children, data.tool_call_id, data.tool)
                 if (ci !== -1) {
                   children[ci] = { ...children[ci], result: data.result, progressStep: undefined }
+
+                  // search 失败或无商品 → 自动标记同组 add_cart 为跳过
+                  const child = children[ci]
+                  if (child.tool === 'hema_search' && child.groupId) {
+                    const sr = data.result
+                    const searchError = sr && !sr.success
+                    const noProducts = sr?.success && !sr?.data?.products?.length
+                    if (searchError || noProducts) {
+                      const cartIdx = children.findIndex(
+                        (c) => c.tool === 'hema_add_cart' && c.groupId === child.groupId && !c.result,
+                      )
+                      if (cartIdx !== -1) {
+                        const reason = searchError ? 'search_error' : 'not_found'
+                        children[cartIdx] = {
+                          ...children[cartIdx],
+                          result: { success: false, data: { skipped_reason: reason }, error: null },
+                          progressStep: undefined,
+                        }
+                      }
+                    }
+                  }
+
                   ac.childCalls = children
                 }
                 ac.progressStep = undefined
@@ -366,6 +443,9 @@ export function useSSE() {
             }
             case 'error':
               error.value = data.error
+              break
+            case 'message_saved':
+              msg.dbId = data.message_id
               break
             case 'done':
               msg.thinking = undefined

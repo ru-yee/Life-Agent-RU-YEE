@@ -22,11 +22,11 @@
     <!-- 已安装 Tab -->
     <div v-if="activeTab === 'installed'" data-testid="installed-panel" class="flex-1 overflow-y-auto px-4 py-4 space-y-4">
       <div v-if="loadingInstalled" class="flex items-center justify-center h-40 text-gray-400 text-sm animate-pulse">
-        加载中...
+        {{ t('skillhub.loading') }}
       </div>
       <div v-else-if="errorInstalled" class="flex flex-col items-center justify-center h-40 text-sm">
         <p class="text-red-500">{{ errorInstalled }}</p>
-        <button class="mt-2 text-blue-600 underline text-xs" @click="loadInstalled">重试</button>
+        <button class="mt-2 text-blue-600 underline text-xs" @click="loadInstalled">{{ t('skillhub.retry') }}</button>
       </div>
       <template v-else>
         <div v-for="group in groupedPlugins" :key="group.type">
@@ -55,7 +55,7 @@
         </div>
         <div v-if="installedPlugins.length === 0" class="flex flex-col items-center justify-center h-40 text-gray-400 text-sm">
           <p class="text-2xl mb-2">🧩</p>
-          <p>暂无扩展</p>
+          <p>{{ t('skillhub.empty') }}</p>
         </div>
       </template>
     </div>
@@ -68,11 +68,11 @@
 
       <div class="flex-1 overflow-y-auto px-4 pb-4 space-y-3">
         <div v-if="loadingMarket" class="flex items-center justify-center h-40 text-gray-400 text-sm animate-pulse">
-          加载中...
+          {{ t('skillhub.loading') }}
         </div>
         <div v-else-if="errorMarket" class="flex flex-col items-center justify-center h-40 text-sm">
           <p class="text-red-500">{{ errorMarket }}</p>
-          <button class="mt-2 text-blue-600 underline text-xs" @click="loadMarket">重试</button>
+          <button class="mt-2 text-blue-600 underline text-xs" @click="loadMarket">{{ t('skillhub.retry') }}</button>
         </div>
         <template v-else>
           <PluginCard
@@ -93,7 +93,7 @@
           />
           <div v-if="marketPlugins.length === 0" class="flex flex-col items-center justify-center h-40 text-gray-400 text-sm">
             <p class="text-2xl mb-2">🔍</p>
-            <p>未找到匹配的插件</p>
+            <p>{{ t('skillhub.notFound') }}</p>
           </div>
         </template>
       </div>
@@ -114,6 +114,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import PluginCard from '../components/skillhub/PluginCard.vue'
 import SearchBar from '../components/skillhub/SearchBar.vue'
 import {
@@ -125,12 +126,14 @@ import {
 } from '../api/skillhub'
 import type { InstalledPlugin, RegistryPlugin } from '../types'
 
-const tabs = [
-  { key: 'installed', label: '已加载' },
-  // { key: 'market', label: '市场' },  // 暂时隐藏
-] as const
+const { t } = useI18n()
 
-type TabKey = typeof tabs[number]['key'] | 'market'
+const tabs = computed(() => [
+  { key: 'installed' as const, label: t('skillhub.tab.installed') },
+  // { key: 'market' as const, label: t('skillhub.tab.market') },
+])
+
+type TabKey = 'installed' | 'market'
 
 const activeTab = ref<TabKey>('installed')
 
@@ -151,11 +154,11 @@ let toastTimer: ReturnType<typeof setTimeout> | null = null
 
 const installedNames = computed(() => new Set(installedPlugins.value.map(p => p.name)))
 
-const TYPE_META: Record<string, { icon: string; label: string; order: number }> = {
-  agent: { icon: '🤖', label: '智能体', order: 0 },
-  memory: { icon: '🧠', label: '记忆', order: 1 },
-  extension: { icon: '🔌', label: '扩展', order: 2 },
-  search: { icon: '🔍', label: '搜索', order: 3 },
+const TYPE_META: Record<string, { icon: string; labelKey: string; order: number }> = {
+  agent: { icon: '🤖', labelKey: 'skillhub.type.agent', order: 0 },
+  memory: { icon: '🧠', labelKey: 'skillhub.type.memory', order: 1 },
+  extension: { icon: '🔌', labelKey: 'skillhub.type.extension', order: 2 },
+  search: { icon: '🔍', labelKey: 'skillhub.type.search', order: 3 },
 }
 
 const groupedPlugins = computed(() => {
@@ -169,7 +172,7 @@ const groupedPlugins = computed(() => {
     .map(([type, items]) => ({
       type,
       icon: TYPE_META[type]?.icon ?? '📦',
-      label: TYPE_META[type]?.label ?? type,
+      label: TYPE_META[type] ? t(TYPE_META[type].labelKey) : type,
       order: TYPE_META[type]?.order ?? 99,
       items,
     }))

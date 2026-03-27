@@ -1,5 +1,6 @@
 export interface Message {
   id: string
+  dbId?: number           // 数据库记录 id，用于持久化更新
   role: 'user' | 'assistant'
   content: string
   timestamp: number
@@ -45,6 +46,7 @@ export type SSEEvent =
   | { event: 'agent_delegate_done'; data: { source: string; target: string; summary: string } }
   | { event: 'agent_progress'; data: { agent: string; type: string; content?: string; tool?: string; tool_call_id?: string; step?: string; params?: Record<string, any>; result?: { success: boolean; data: any; error: string | null }; items?: { tool: string; params?: Record<string, any> }[] } }
   | { event: 'input_request'; data: { request_id: string; tool: string; prompt: string; options: { label: string; value: string }[]; input_type: 'select' | 'text' } }
+  | { event: 'message_saved'; data: { message_id: number } }
 
 export interface Plugin {
   name: string

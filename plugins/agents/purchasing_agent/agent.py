@@ -4,13 +4,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from jinja2 import Template
-
 from core.interfaces.agent import BaseStreamAgent
 from core.interfaces.tool import BaseTool
-
-
-PROMPT_TEMPLATE_PATH = Path(__file__).parent / "prompts" / "system.j2"
 
 
 class PurchasingAgent(BaseStreamAgent):
@@ -20,7 +15,6 @@ class PurchasingAgent(BaseStreamAgent):
 
     def __init__(self, context_bus: Any = None, config: dict | None = None):
         super().__init__(context_bus=context_bus, config=config or {})
-        self._template: Template | None = None
         self._tools: list[BaseTool] = []
 
     @property
@@ -46,10 +40,8 @@ class PurchasingAgent(BaseStreamAgent):
         self._tools = tools
 
     def get_system_prompt(self, context: dict) -> str:
-        if self._template is None:
-            template_text = PROMPT_TEMPLATE_PATH.read_text(encoding="utf-8")
-            self._template = Template(template_text)
-
-        return self._template.render(
+        from core.prompt_loader import load_prompt
+        return load_prompt(
+            Path(__file__).parent / "prompts",
             shopping_list=context.get("shopping_list", ""),
         )
